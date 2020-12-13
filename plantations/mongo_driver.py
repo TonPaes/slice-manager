@@ -18,7 +18,7 @@ def save_data(conn, data):
     db = conn['sojadb']
     col = db['sojacol']
 
-    print(col.insert_one(data))
+    _ = col.insert_one(data)
 
 #mongo get_data
 def show_data(conn):

@@ -12,11 +12,19 @@ conn = mongo_driver.mongo_conn()
 #will list all mongo colums
 @get('/api')
 def list_docs_api():
-    return "Hello, world! (From Full Stack Python)"
+    return mongo_driver.show_data(conn)
 
 @post('/api')
 def insert_docs_api():
-    return "hey did you try to upload something?"
+    data = {'temperatura': request.body.get('temperatura'),
+            'umidade': request.body.get('umidade'),
+            'ph': request.body.get('ph'),
+            'vento': request.body.get('vento'),
+    }
+    
+    _ = mongo_driver.save_data(conn, data)
+
+    return ''
 
 @get('/web')
 def list_docs_web():
@@ -41,10 +49,6 @@ def insert_docs_web():
     mongo_driver.save_data(conn, data)
 
     return mongo_driver.show_data(conn)
-
-@route('/results')
-def show_results():
-    return "Here you see the results"
 
 
 if __name__ == "__main__":
