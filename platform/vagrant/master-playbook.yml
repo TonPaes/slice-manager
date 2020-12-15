@@ -1,0 +1,120 @@
+- hosts: all
+  
+  become: true
+  become_method: sudo
+
+
+  tasks:
+  
+  - name: Install packages that allow apt to be used over HTTPS
+    apt:
+      name: "{{ packages }}"
+      state: present
+      update_cache: yes
+    vars:
+      packages:
+      - apt-transport-https
+      - ca-certificates
+      - curl
+      - gnupg-agent
+      - software-properties-common
+
+  - name: Add an apt signing key for Docker
+    apt_key:
+      url: https://download.docker.com/linux/ubuntu/gpg
+      state: present
+
+  - name: Add apt repository for stable version
+    apt_repository:
+      repo: deb [arch=amd64] https://download.docker.com/linux/ubuntu xenial stable
+      state: present
+
+  - name: Install docker and its dependecies
+    apt: 
+      name: "{{ packages }}"
+      state: present
+      update_cache: yes
+    vars:
+      packages:
+      - docker-ce 
+      - docker-ce-cli 
+      - containerd.io
+    notify:
+      - docker status
+
+  - name: Add vagrant user to docker group
+    user:
+      name: vagrant
+      group: docker
+  
+  - name: Remove Swapfile from /etc/fstab  
+    mount:
+      name: "{{ item }}"
+      fstype: swap
+      state: absent
+    with_items:
+      - swap
+      - none
+    become: yes 
+
+  - name: Disable swap 
+    command: swapoff -a
+    when: ansible_swaptotal_mb > 0
+    become : yes
+
+  - name: Add an apt signing key for Kubernetes
+    apt_key:
+      url: https://packages.cloud.google.com/apt/doc/apt-key.gpg
+      state: present
+    become: yes
+  
+  - name: Adding apt repository for Kubernetes
+    apt_repository:
+      repo: deb https://apt.kubernetes.io/ kubernetes-xenial main
+      state: present
+      filename: kubernetes.list
+    become: yes
+
+  - name: Atualiza a lista de repositórios e instala os pacotes do K8s
+    apt: name={{ item }} update_cache=yes
+    loop: ['kubelet', 'kubeadm', 'kubectl']
+    become: yes
+  
+  - name: Inicia o cluster kubernetes
+    command: kubeadm init --apiserver-advertise-address 192.168.50.10
+    become: yes
+
+  - name: Cria a estrutura de diretórios para o funcionamento do Kubernetes
+    file:
+      path: /home/vagrant/.kube
+      state: directory
+
+  - name: Copia as configura ̧c~oes do kubernetes para o diret ́orio do usu ́ario→ vagrant
+    command: cp -i /etc/kubernetes/admin.conf /home/vagrant/.kube/config
+    become: yes
+
+  - name: Ajusta as permiss~oes no arquivo de configura ̧c~ao do Kubernetes
+    file:
+      path: /home/vagrant/.kube/config
+      owner: vagrant
+      group: vagrant
+      state: file
+    become: yes
+
+  - name: Instala o plugin Weave para gerenciar a rede
+    command: kubectl apply -f /vagrant/kubernetes-setup/net.yml
+
+  - name: Salva o token para entrada de novos n ́os no cluster
+    command: kubeadm token create --print-join-command
+    register: join_command
+
+  - name: Copia o token para entrada de novos n ́os no cluster em um arquivo
+    become: false
+    local_action: copy content="{{ join_command.stdout_lines[0] }}" dest="./join-command.sh"
+
+  - name: Enfia o deployment no curl
+    command: kubectl apply -f https://github.com/kimdraug/tafab/blob/main/deployment.yml
+
+  handlers:
+  - name: docker status
+    service: name=docker state=started
